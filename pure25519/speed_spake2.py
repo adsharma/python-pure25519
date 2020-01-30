@@ -21,9 +21,9 @@ def abbrev(t):
 
 def p(name, setup_statements, statements):
     t = sorted([do(setup_statements, statements) for i in range(3)])
-    print("%12s: %s (%s)" % (name,
+    print(("%12s: %s (%s)" % (name,
                              abbrev(min(t)),
-                             " ".join([abbrev(s) for s in t])))
+                             " ".join([abbrev(s) for s in t]))))
 
 def run():
     S1 = "import os; from pure25519 import spake2; pw=b'pw'; A=b'idA'; B=b'idB'"

@@ -23,9 +23,9 @@ def abbrev(t):
 
 def p(name, setup_statements, statements):
     t = sorted([do(setup_statements, statements) for i in range(3)])
-    print("%-32s: %s (%s)" % (name,
+    print(("%-32s: %s (%s)" % (name,
                              abbrev(min(t)),
-                             " ".join([abbrev(s) for s in t])))
+                             " ".join([abbrev(s) for s in t]))))
 
 # pure_ed25519.sign() is doing an extra publickey(), doubles the cost
 
