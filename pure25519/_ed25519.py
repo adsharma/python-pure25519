@@ -1,4 +1,4 @@
-from . import eddsa
+from pure25519 import eddsa
 
 # adapt pure25519/ed25519.py to behave like (C/glue) ed25519/_ed25519.py, so
 # ed25519_oop.py doesn't have to change

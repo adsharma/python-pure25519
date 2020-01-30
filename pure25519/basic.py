@@ -251,10 +251,14 @@ class ElementOfUnknownGroup:
     def to_bytes(self) -> bytes:
         return encodepoint(xform_extended_to_affine(self.XYTZ))
 
-    def __eq__(self, other: "ElementOfUnknownGroup") -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ElementOfUnknownGroup):
+            return False
         return self.to_bytes() == other.to_bytes()
 
-    def __ne__(self, other: "ElementOfUnknownGroup") -> bool:
+    def __ne__(self, other: object) -> bool:
+        if not isinstance(other, ElementOfUnknownGroup):
+            return True
         return not self == other
 
 
@@ -377,6 +381,7 @@ def arbitrary_element(seed: bytes) -> Element:  # unknown DL
 
         return Element(P8.XYTZ)
     # never reached
+    raise Exception("Should never get here")
 
 
 def bytes_to_unknown_group_element(bytes: bytes) -> ElementOfUnknownGroup:
