@@ -30,24 +30,29 @@ from . import eddsa
 #  sig = signature(msg, sk or sk+vk, vk)
 #  bool = checkvalid(sig, msg, vk)
 
+
 class BadSignatureError(Exception):
     pass
+
 
 SECRETKEYBYTES = 64
 PUBLICKEYBYTES = 32
 SIGNATUREKEYBYTES = 64
 
+
 def publickey(seed32):
     assert len(seed32) == 32
     vk32 = eddsa.publickey(seed32)
-    return vk32, seed32+vk32
+    return vk32, seed32 + vk32
+
 
 def sign(msg, skvk):
     assert len(skvk) == 64
     sk = skvk[:32]
     vk = skvk[32:]
     sig = eddsa.signature(msg, sk, vk)
-    return sig+msg
+    return sig + msg
+
 
 def open(sigmsg, vk):
     assert len(vk) == 32

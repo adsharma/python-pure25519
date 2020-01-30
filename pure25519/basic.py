@@ -1,150 +1,186 @@
 import binascii, hashlib, itertools
 
 from typing import Callable, List, Tuple, Union
-Q = 2**255 - 19
-L = 2**252 + 27742317777372353535851937790883648493
+
+Q = 2 ** 255 - 19
+L = 2 ** 252 + 27742317777372353535851937790883648493
+
 
 def inv(x: int) -> int:
-    return pow(x, Q-2, Q)
+    return pow(x, Q - 2, Q)
+
 
 d = -121665 * inv(121666)
-I = pow(2,(Q-1)//4,Q)
+I = pow(2, (Q - 1) // 4, Q)
+
 
 def xrecover(y: int) -> int:
-    xx = (y*y-1) * inv(d*y*y+1)
-    x = pow(xx,(Q+3)//8,Q)
-    if (x*x - xx) % Q != 0: x = (x*I) % Q
-    if x % 2 != 0: x = Q-x
+    xx = (y * y - 1) * inv(d * y * y + 1)
+    x = pow(xx, (Q + 3) // 8, Q)
+    if (x * x - xx) % Q != 0:
+        x = (x * I) % Q
+    if x % 2 != 0:
+        x = Q - x
     return x
+
 
 By = 4 * inv(5)
 Bx = xrecover(By)
-B = [Bx % Q,By % Q]
+B = [Bx % Q, By % Q]
 
 # Extended Coordinates: x=X/Z, y=Y/Z, x*y=T/Z
 # http://www.hyperelliptic.org/EFD/g1p/auto-twisted-extended-1.html
 
-def xform_affine_to_extended(pt: Union[List[int], Tuple[int, int]]) -> Tuple[int, int, int, int]:
+
+def xform_affine_to_extended(
+    pt: Union[List[int], Tuple[int, int]]
+) -> Tuple[int, int, int, int]:
     (x, y) = pt
-    return (x%Q, y%Q, 1, (x*y)%Q) # (X,Y,Z,T)
+    return (x % Q, y % Q, 1, (x * y) % Q)  # (X,Y,Z,T)
+
 
 def xform_extended_to_affine(pt: Tuple[int, int, int, int]) -> Tuple[int, int]:
     (x, y, z, _) = pt
-    return ((x*inv(z))%Q, (y*inv(z))%Q)
+    return ((x * inv(z)) % Q, (y * inv(z)) % Q)
 
-def double_element(pt: Tuple[int, int, int, int]) -> Tuple[int, int, int, int]: # extended->extended
+
+def double_element(
+    pt: Tuple[int, int, int, int]
+) -> Tuple[int, int, int, int]:  # extended->extended
     # dbl-2008-hwcd
     (X1, Y1, Z1, _) = pt
-    A = (X1*X1)
-    B = (Y1*Y1)
-    C = (2*Z1*Z1)
+    A = X1 * X1
+    B = Y1 * Y1
+    C = 2 * Z1 * Z1
     D = (-A) % Q
-    J = (X1+Y1) % Q
-    E = (J*J-A-B) % Q
-    G = (D+B) % Q
-    F = (G-C) % Q
-    H = (D-B) % Q
-    X3 = (E*F) % Q
-    Y3 = (G*H) % Q
-    Z3 = (F*G) % Q
-    T3 = (E*H) % Q
+    J = (X1 + Y1) % Q
+    E = (J * J - A - B) % Q
+    G = (D + B) % Q
+    F = (G - C) % Q
+    H = (D - B) % Q
+    X3 = (E * F) % Q
+    Y3 = (G * H) % Q
+    Z3 = (F * G) % Q
+    T3 = (E * H) % Q
     return (X3, Y3, Z3, T3)
 
-def add_elements(pt1: Tuple[int, int, int, int], pt2: Tuple[int, int, int, int]) -> Tuple[int, int, int, int]: # extended->extended
+
+def add_elements(
+    pt1: Tuple[int, int, int, int], pt2: Tuple[int, int, int, int]
+) -> Tuple[int, int, int, int]:  # extended->extended
     # add-2008-hwcd-3 . Slightly slower than add-2008-hwcd-4, but -3 is
     # unified, so it's safe for general-purpose addition
     (X1, Y1, Z1, T1) = pt1
     (X2, Y2, Z2, T2) = pt2
-    A = ((Y1-X1)*(Y2-X2)) % Q
-    B = ((Y1+X1)*(Y2+X2)) % Q
-    C = T1*(2*d)*T2 % Q
-    D = Z1*2*Z2 % Q
-    E = (B-A) % Q
-    F = (D-C) % Q
-    G = (D+C) % Q
-    H = (B+A) % Q
-    X3 = (E*F) % Q
-    Y3 = (G*H) % Q
-    T3 = (E*H) % Q
-    Z3 = (F*G) % Q
+    A = ((Y1 - X1) * (Y2 - X2)) % Q
+    B = ((Y1 + X1) * (Y2 + X2)) % Q
+    C = T1 * (2 * d) * T2 % Q
+    D = Z1 * 2 * Z2 % Q
+    E = (B - A) % Q
+    F = (D - C) % Q
+    G = (D + C) % Q
+    H = (B + A) % Q
+    X3 = (E * F) % Q
+    Y3 = (G * H) % Q
+    T3 = (E * H) % Q
+    Z3 = (F * G) % Q
     return (X3, Y3, Z3, T3)
 
-def scalarmult_element_safe_slow(pt: Tuple[int, int, int, int], n: int) -> Tuple[int, int, int, int]:
+
+def scalarmult_element_safe_slow(
+    pt: Tuple[int, int, int, int], n: int
+) -> Tuple[int, int, int, int]:
     # this form is slightly slower, but tolerates arbitrary points, including
     # those which are not in the main 1*L subgroup. This includes points of
     # order 1 (the neutral element Zero), 2, 4, and 8.
     assert n >= 0
-    if n==0:
-        return xform_affine_to_extended((0,1))
-    _ = double_element(scalarmult_element_safe_slow(pt, n>>1))
-    return add_elements(_, pt) if n&1 else _
+    if n == 0:
+        return xform_affine_to_extended((0, 1))
+    _ = double_element(scalarmult_element_safe_slow(pt, n >> 1))
+    return add_elements(_, pt) if n & 1 else _
 
-def _add_elements_nonunfied(pt1: Tuple[int, int, int, int], pt2: Tuple[int, int, int, int]) -> Tuple[int, int, int, int]: # extended->extended
+
+def _add_elements_nonunfied(
+    pt1: Tuple[int, int, int, int], pt2: Tuple[int, int, int, int]
+) -> Tuple[int, int, int, int]:  # extended->extended
     # add-2008-hwcd-4 : NOT unified, only for pt1!=pt2. About 10% faster than
     # the (unified) add-2008-hwcd-3, and safe to use inside scalarmult if you
     # aren't using points of order 1/2/4/8
     (X1, Y1, Z1, T1) = pt1
     (X2, Y2, Z2, T2) = pt2
-    A = ((Y1-X1)*(Y2+X2)) % Q
-    B = ((Y1+X1)*(Y2-X2)) % Q
-    C = (Z1*2*T2) % Q
-    D = (T1*2*Z2) % Q
-    E = (D+C) % Q
-    F = (B-A) % Q
-    G = (B+A) % Q
-    H = (D-C) % Q
-    X3 = (E*F) % Q
-    Y3 = (G*H) % Q
-    Z3 = (F*G) % Q
-    T3 = (E*H) % Q
+    A = ((Y1 - X1) * (Y2 + X2)) % Q
+    B = ((Y1 + X1) * (Y2 - X2)) % Q
+    C = (Z1 * 2 * T2) % Q
+    D = (T1 * 2 * Z2) % Q
+    E = (D + C) % Q
+    F = (B - A) % Q
+    G = (B + A) % Q
+    H = (D - C) % Q
+    X3 = (E * F) % Q
+    Y3 = (G * H) % Q
+    Z3 = (F * G) % Q
+    T3 = (E * H) % Q
     return (X3, Y3, Z3, T3)
 
-def scalarmult_element(pt: Tuple[int, int, int, int], n: int) -> Tuple[int, int, int, int]: # extended->extended
+
+def scalarmult_element(
+    pt: Tuple[int, int, int, int], n: int
+) -> Tuple[int, int, int, int]:  # extended->extended
     # This form only works properly when given points that are a member of
     # the main 1*L subgroup. It will give incorrect answers when called with
     # the points of order 1/2/4/8, including point Zero. (it will also work
     # properly when given points of order 2*L/4*L/8*L)
     assert n >= 0
-    if n==0:
-        return xform_affine_to_extended((0,1))
-    _ = double_element(scalarmult_element(pt, n>>1))
-    return _add_elements_nonunfied(_, pt) if n&1 else _
+    if n == 0:
+        return xform_affine_to_extended((0, 1))
+    _ = double_element(scalarmult_element(pt, n >> 1))
+    return _add_elements_nonunfied(_, pt) if n & 1 else _
+
 
 # points are encoded as 32-bytes little-endian, b255 is sign, b2b1b0 are 0
+
 
 def encodepoint(P: Tuple[int, int]) -> bytes:
     x = P[0]
     y = P[1]
     # MSB of output equals x.b0 (=x&1)
     # rest of output is little-endian y
-    assert 0 <= y < (1<<255) # always < 0x7fff..ff
+    assert 0 <= y < (1 << 255)  # always < 0x7fff..ff
     if x & 1:
-        y += 1<<255
+        y += 1 << 255
     return binascii.unhexlify("%064x" % y)[::-1]
+
 
 def isoncurve(P: List[int]) -> bool:
     x = P[0]
     y = P[1]
-    return (-x*x + y*y - 1 - d*x*x*y*y) % Q == 0
+    return (-x * x + y * y - 1 - d * x * x * y * y) % Q == 0
+
 
 class NotOnCurve(Exception):
     pass
 
+
 def decodepoint(s: bytes) -> List[int]:
     unclamped = int(binascii.hexlify(s[:32][::-1]), 16)
     clamp = (1 << 255) - 1
-    y = unclamped & clamp # clear MSB
+    y = unclamped & clamp  # clear MSB
     x = xrecover(y)
-    if bool(x & 1) != bool(unclamped & (1<<255)): x = Q-x
-    P = [x,y]
-    if not isoncurve(P): raise NotOnCurve("decoding point that is not on curve")
+    if bool(x & 1) != bool(unclamped & (1 << 255)):
+        x = Q - x
+    P = [x, y]
+    if not isoncurve(P):
+        raise NotOnCurve("decoding point that is not on curve")
     return P
 
+
 # scalars are encoded as 32-bytes little-endian
+
 
 def bytes_to_scalar(s: bytes) -> int:
     assert len(s) == 32, len(s)
     return int(binascii.hexlify(s[::-1]), 16)
+
 
 def bytes_to_clamped_scalar(s: bytes) -> int:
     # Ed25519 private keys clamp the scalar to ensure two things:
@@ -154,35 +190,41 @@ def bytes_to_clamped_scalar(s: bytes) -> int:
     #      any information
     # set the top two bits to 01, and the bottom three to 000
     a_unclamped = bytes_to_scalar(s)
-    AND_CLAMP = (1<<254) - 1 - 7
-    OR_CLAMP = (1<<254)
+    AND_CLAMP = (1 << 254) - 1 - 7
+    OR_CLAMP = 1 << 254
     a_clamped = (a_unclamped & AND_CLAMP) | OR_CLAMP
     return a_clamped
 
-def random_scalar(entropy_f: Callable) -> int: # 0..L-1 inclusive
+
+def random_scalar(entropy_f: Callable) -> int:  # 0..L-1 inclusive
     # reduce the bias to a safe level by generating 256 extra bits
-    oversized = int(binascii.hexlify(entropy_f(32+32)), 16)
+    oversized = int(binascii.hexlify(entropy_f(32 + 32)), 16)
     return oversized % L
+
 
 def password_to_scalar(pw: bytes) -> int:
     oversized = hashlib.sha512(pw).digest()
     return int(binascii.hexlify(oversized), 16) % L
 
+
 def scalar_to_bytes(y: int) -> bytes:
     y = y % L
-    assert 0 <= y < 2**256
+    assert 0 <= y < 2 ** 256
     return binascii.unhexlify("%064x" % y)[::-1]
 
+
 # Elements, of various orders
+
 
 def is_extended_zero(XYTZ: Tuple[int, int, int, int]) -> bool:
     # catch Zero
     (X, Y, Z, T) = XYTZ
     Y = Y % Q
     Z = Z % Q
-    if X==0 and Y==Z and Y!=0:
+    if X == 0 and Y == Z and Y != 0:
         return True
     return False
+
 
 class ElementOfUnknownGroup:
     # This is used for points of order 2,4,8,2*L,4*L,8*L
@@ -208,10 +250,13 @@ class ElementOfUnknownGroup:
 
     def to_bytes(self) -> bytes:
         return encodepoint(xform_extended_to_affine(self.XYTZ))
+
     def __eq__(self, other: "ElementOfUnknownGroup") -> bool:
         return self.to_bytes() == other.to_bytes()
+
     def __ne__(self, other: "ElementOfUnknownGroup") -> bool:
         return not self == other
+
 
 class Element(ElementOfUnknownGroup):
     # this only holds elements in the main 1*L subgroup. It never holds Zero,
@@ -246,28 +291,33 @@ class Element(ElementOfUnknownGroup):
     # negation and subtraction only make sense for the main subgroup
     def negate(self):
         # slow. Prefer e.scalarmult(-pw) to e.scalarmult(pw).negate()
-        return Element(scalarmult_element(self.XYTZ, L-2))
+        return Element(scalarmult_element(self.XYTZ, L - 2))
+
     def subtract(self, other):
         return self.add(other.negate())
 
+
 class _ZeroElement(ElementOfUnknownGroup):
     def add(self, other: ElementOfUnknownGroup) -> ElementOfUnknownGroup:
-        return other # zero+anything = anything
+        return other  # zero+anything = anything
+
     def scalarmult(self, s: int) -> "_ZeroElement":
-        return self # zero*anything = zero
+        return self  # zero*anything = zero
+
     def negate(self):
-        return self # -zero = zero
+        return self  # -zero = zero
+
     def subtract(self, other):
         return self.add(other.negate())
 
 
 Base = Element(xform_affine_to_extended(B))
-Zero = _ZeroElement(xform_affine_to_extended((0,1))) # the neutral (identity) element
+Zero = _ZeroElement(xform_affine_to_extended((0, 1)))  # the neutral (identity) element
 
 _zero_bytes = Zero.to_bytes()
 
 
-def arbitrary_element(seed: bytes) -> Element: # unknown DL
+def arbitrary_element(seed: bytes) -> Element:  # unknown DL
     # TODO: if we don't need uniformity, maybe use just sha256 here?
     hseed = hashlib.sha512(seed).digest()
     y = int(binascii.hexlify(hseed), 16) % Q
@@ -276,7 +326,7 @@ def arbitrary_element(seed: bytes) -> Element: # unknown DL
     for plus in itertools.count(0):
         y_plus = (y + plus) % Q
         x = xrecover(y_plus)
-        Pa = [x,y_plus] # no attempt to use both "positive" and "negative" X
+        Pa = [x, y_plus]  # no attempt to use both "positive" and "negative" X
 
         # only about 50% of Y coordinates map to valid curve points (I think
         # the other half give you points on the "twist").
@@ -328,12 +378,14 @@ def arbitrary_element(seed: bytes) -> Element: # unknown DL
         return Element(P8.XYTZ)
     # never reached
 
+
 def bytes_to_unknown_group_element(bytes: bytes) -> ElementOfUnknownGroup:
     # this accepts all elements, including Zero and wrong-subgroup ones
     if bytes == _zero_bytes:
         return Zero
     XYTZ = xform_affine_to_extended(decodepoint(bytes))
     return ElementOfUnknownGroup(XYTZ)
+
 
 def bytes_to_element(bytes: bytes) -> Element:
     # this strictly only accepts elements in the right subgroup
